@@ -97,29 +97,26 @@ xlim([1, 1000]);
 %% Algorithmic Parameter Extraction 
 fprintf('\n--- Running Non-Linear Optimization for System ID ---\n');
 
-% 1. Define the theoretical Magnitude equation (in dB)
+% Define the theoretical Magnitude equation (in dB)
 mag_theory_db = @(Km,Tm,w) 20*log10( Km ./ (w .* sqrt(1 + (w.*Tm).^2)) );
 
-% 2. Define the Cost Function (Mean Squared Error)
+% Use theortical Mg - Measurment Data -> get the cost function
 cost_function = @(q) mean(( mag_theory_db(exp(q(1)), exp(q(2)), omega_rad_sec) - Mag_dB_05V ).^2);
 
-% 3. Provide an Initial Guess [Km_guess, Tm_guess]
 initial_guess = log([100, 0.5]);
 
-% 4. Run the Optimization Algorithm
+% Use fminsearch do alittle optimization
 options = optimset('Display','off','TolX',1e-8,'TolFun',1e-8);
 optimal_params = fminsearch(cost_function, initial_guess, options);
 
-% 5. Extract the mathematically perfect parameters
+% Get the parameter
 Km_opt = exp(optimal_params(1));
 Tm_opt = exp(optimal_params(2));
 final_mse = cost_function(optimal_params);
-
-% 6. Console Output
 fprintf('Optimal Parameters Found: Km = %.2f, Tm = %.4f with an MSE of %.2f\n', ...
         Km_opt, Tm_opt, final_mse);
 
-%% Digital Twin Validation 
+%% Validation 
 omega_smooth = logspace(log10(min(omega_rad_sec)), log10(max(omega_rad_sec)), 500);
 Mag_dB_smooth = mag_theory_db(Km_opt, Tm_opt, omega_smooth);
 
@@ -128,50 +125,47 @@ hold on;
 plot(omega_smooth, Mag_dB_smooth, 'k--', 'LineWidth', 2, 'DisplayName', 'Optimized Digital Twin');
 legend('Location', 'southwest');
 
-
-%% Digital Twin Time-Domain Validation
+%% Time-Domain Validation
 fprintf('\n--- Generating Digital Twin Validation ---\n');
 
-% 1. Build the Digital Twin (The Transfer Function)
+% Build the Transferfunction
 % The manual defines H(s) = Km / (s * (Tm*s + 1)) which expands to:
 % H(s) = Km / (Tm*s^2 + s + 0)
 numerator = Km_opt;
 denominator = [Tm_opt, 1, 0];
 sys_motor = tf(numerator, denominator);
 
-% 2. Generate the Virtual Input Signal
+% Maybe change to a different frequncy, this is kind of the worst frequency you can choose
 f_test = 2.5;                % Hz
 Amp_test = 0.5;              % Volts
 t_sim = 0 : (1/Fs) : 10;     % 10 seconds of simulated time at 1000 Hz
 u_sim = Amp_test * sin(2 * pi * f_test * t_sim); % Virtual voltage command
 
-% 3. Run the Virtual Simulation
+% Run
 [y_sim_raw, t_sim] = lsim(sys_motor, u_sim, t_sim);
 
-% 4. Filter the Virtual Data (The Apples-to-Apples Step)
+% You wanna filter the virtual data (Like Apple to Apple)
 y_sim_filt = filter(b, a, y_sim_raw);
 
-% 5. Load the Actual Physical Hardware Data for Comparison
+% Do the actual comparison with the physical hardware
 fname_val = fullfile('test_run', sprintf('sweep_%.1fV_%.1fHz.txt', Amp_test, f_test));
 
 raw_val_data = readmatrix(fname_val);
-filt_hardware = raw_val_data(2:end, 2); % Extract the hardware's filtered column
+filt_hardware = raw_val_data(2:end, 2); 
 t_hardware = (0:length(filt_hardware)-1) / Fs;
 
-% 6. Align the Steady-State Data (Skip the transient)
-idx0 = floor(Tdelay * Fs) + 1; % Skip the first second of filter transient
+% Align SS data - skip transient
+idx0 = floor(Tdelay * Fs) + 1; 
 
 t_plot = t_hardware(idx0:end);
 hardware_plot = filt_hardware(idx0:end);
-sim_plot = y_sim_filt(idx0:length(t_hardware)); % Truncate sim to match hardware length
+sim_plot = y_sim_filt(idx0:length(t_hardware)); 
 
-% 7. The Money Shot Plot
+% Plot
 figure('Name', 'Digital Twin Validation', 'Color', 'w');
 plot(t_plot, hardware_plot, 'r', 'LineWidth', 2, 'DisplayName', 'Physical Hardware Data');
 hold on;
 plot(t_plot, sim_plot, 'k--', 'LineWidth', 2, 'DisplayName', 'Digital Twin Simulation');
-
-% Format the Plot
 grid on;
 xlim([Tdelay, Tdelay + 2]);
 xlabel('Time (seconds)', 'FontWeight', 'bold');
