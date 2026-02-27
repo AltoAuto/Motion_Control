@@ -126,7 +126,7 @@ plot(omega_smooth, Mag_dB_smooth, 'k--', 'LineWidth', 2, 'DisplayName', 'Optimiz
 legend('Location', 'southwest');
 
 %% Time-Domain Validation
-fprintf('\n--- Generating Digital Twin Validation ---\n');
+fprintf('\n--- Generating Time-Domain Validation ---\n');
 
 % Build the Transferfunction
 % The manual defines H(s) = Km / (s * (Tm*s + 1)) which expands to:
